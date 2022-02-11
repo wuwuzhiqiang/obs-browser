@@ -5,6 +5,9 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#if !defined(_WIN32) && !defined(__APPLE__)
+#include <X11/Xlib.h>
+#endif
 
 /* CefClient */
 CefRefPtr<CefLoadHandler> QCefBrowserClient::GetLoadHandler()
@@ -37,6 +40,11 @@ CefRefPtr<CefKeyboardHandler> QCefBrowserClient::GetKeyboardHandler()
 	return this;
 }
 
+CefRefPtr<CefJSDialogHandler> QCefBrowserClient::GetJSDialogHandler()
+{
+	return this;
+}
+
 /* CefDisplayHandler */
 void QCefBrowserClient::OnTitleChange(CefRefPtr<CefBrowser> browser,
 				      const CefString &title)
@@ -47,10 +55,12 @@ void QCefBrowserClient::OnTitleChange(CefRefPtr<CefBrowser> browser,
 		QMetaObject::invokeMethod(widget, "titleChanged",
 					  Q_ARG(QString, qt_title));
 	} else { /* handle popup title */
+		CefWindowHandle handl = browser->GetHost()->GetWindowHandle();
 #ifdef _WIN32
 		std::wstring str_title = title;
-		HWND hwnd = browser->GetHost()->GetWindowHandle();
-		SetWindowTextW(hwnd, str_title.c_str());
+		SetWindowTextW((HWND)handl, str_title.c_str());
+#elif defined(__linux__)
+		XStoreName(cef_get_xdisplay(), handl, title.ToString().c_str());
 #endif
 	}
 }
@@ -149,10 +159,7 @@ bool QCefBrowserClient::OnBeforePopup(
 	const CefString &, CefLifeSpanHandler::WindowOpenDisposition, bool,
 	const CefPopupFeatures &, CefWindowInfo &windowInfo,
 	CefRefPtr<CefClient> &, CefBrowserSettings &,
-#if CHROME_VERSION_BUILD >= 3770
-	CefRefPtr<CefDictionaryValue> &,
-#endif
-	bool *)
+	CefRefPtr<CefDictionaryValue> &, bool *)
 {
 	if (allowAllPopups) {
 #ifdef _WIN32
@@ -266,6 +273,97 @@ void QCefBrowserClient::OnLoadEnd(CefRefPtr<CefBrowser>,
 {
 	if (frame->IsMain() && !script.empty())
 		frame->ExecuteJavaScript(script, CefString(), 0);
+}
+
+bool QCefBrowserClient::OnJSDialog(CefRefPtr<CefBrowser>, const CefString &,
+				   CefJSDialogHandler::JSDialogType dialog_type,
+				   const CefString &message_text,
+				   const CefString &default_prompt_text,
+				   CefRefPtr<CefJSDialogCallback> callback,
+				   bool &)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+	QString parentTitle = widget->parentWidget()->windowTitle();
+	std::string default_value = default_prompt_text;
+	QString msg_raw(message_text.ToString().c_str());
+	// Replace <br> with standard newline as we will render in plaintext
+	msg_raw.replace(QRegularExpression("<br\\s{0,1}\\/{0,1}>"), "\n");
+	QString submsg =
+		QString(obs_module_text("Dialog.ReceivedFrom")).arg(parentTitle);
+	QString msg = QString("%1\n\n\n%2").arg(msg_raw).arg(submsg);
+
+	if (dialog_type == JSDIALOGTYPE_PROMPT) {
+		auto msgbox = [msg, default_value, callback]() {
+			QInputDialog *dlg = new QInputDialog(nullptr);
+			dlg->setWindowFlag(Qt::WindowStaysOnTopHint, true);
+			dlg->setWindowFlag(Qt::WindowContextHelpButtonHint,
+					   false);
+			std::stringstream title;
+			title << obs_module_text("Dialog.Prompt") << ": "
+			      << obs_module_text("Dialog.BrowserDock");
+			dlg->setWindowTitle(title.str().c_str());
+			if (!default_value.empty())
+				dlg->setTextValue(default_value.c_str());
+
+			auto finished = [callback, dlg](int result) {
+				callback.get()->Continue(
+					result == QDialog::Accepted,
+					dlg->textValue().toUtf8().constData());
+			};
+
+			QWidget::connect(dlg, &QInputDialog::finished,
+					 finished);
+			dlg->open();
+			if (QLabel *lbl = dlg->findChild<QLabel *>()) {
+				// Force plaintext manually
+				lbl->setTextFormat(Qt::PlainText);
+			}
+			dlg->setLabelText(msg);
+		};
+		QMetaObject::invokeMethod(
+			QCoreApplication::instance()->thread(), msgbox);
+		return true;
+	}
+	auto msgbox = [msg, dialog_type, callback]() {
+		QMessageBox *dlg = new QMessageBox(nullptr);
+		dlg->setStandardButtons(QMessageBox::Ok);
+		dlg->setWindowFlag(Qt::WindowStaysOnTopHint, true);
+		dlg->setTextFormat(Qt::PlainText);
+		dlg->setText(msg);
+		std::stringstream title;
+		switch (dialog_type) {
+		case JSDIALOGTYPE_CONFIRM:
+			title << obs_module_text("Dialog.Confirm");
+			dlg->setIcon(QMessageBox::Question);
+			dlg->addButton(QMessageBox::Cancel);
+			break;
+		case JSDIALOGTYPE_ALERT:
+		default:
+			title << obs_module_text("Dialog.Alert");
+			dlg->setIcon(QMessageBox::Information);
+			break;
+		}
+		title << ": " << obs_module_text("Dialog.BrowserDock");
+		dlg->setWindowTitle(title.str().c_str());
+
+		auto finished = [callback](int result) {
+			callback.get()->Continue(result == QMessageBox::Ok, "");
+		};
+
+		QWidget::connect(dlg, &QMessageBox::finished, finished);
+
+		dlg->open();
+	};
+	QMetaObject::invokeMethod(QCoreApplication::instance()->thread(),
+				  msgbox);
+	return true;
+#else
+	UNUSED_PARAMETER(dialog_type);
+	UNUSED_PARAMETER(message_text);
+	UNUSED_PARAMETER(default_prompt_text);
+	UNUSED_PARAMETER(callback);
+	return false;
+#endif
 }
 
 bool QCefBrowserClient::OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
