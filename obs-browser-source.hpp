@@ -68,11 +68,13 @@ struct BrowserSource {
 	std::string css;
 	gs_texture_t *texture = nullptr;
 	gs_texture_t *extra_texture = nullptr;
+	uint32_t last_cx = 0;
+	uint32_t last_cy = 0;
+	gs_color_format last_format = GS_UNKNOWN;
 
 #ifdef SHARED_TEXTURE_SUPPORT_ENABLED
 #ifdef _WIN32
 	void *last_handle = INVALID_HANDLE_VALUE;
-	void *extra_handle = INVALID_HANDLE_VALUE;
 #elif defined(__APPLE__)
 	void *last_handle = nullptr;
 #endif
@@ -103,6 +105,9 @@ struct BrowserSource {
 		if (extra_texture) {
 			gs_texture_destroy(extra_texture);
 			extra_texture = nullptr;
+			last_cx = 0;
+			last_cy = 0;
+			last_format = GS_UNKNOWN;
 		}
 		if (texture) {
 			gs_texture_destroy(texture);
