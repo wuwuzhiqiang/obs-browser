@@ -460,15 +460,7 @@ void BrowserSource::SetShowing(bool showing)
 
 		obs_enter_graphics();
 
-		if (hwaccel && texture) {
-#ifdef _WIN32
-			gs_texture_release_sync(texture, 0);
-#endif
-			DestroyTextures();
-#ifdef _WIN32
-			CloseHandle(extra_handle);
-#endif
-		} else {
+		if (!hwaccel && texture) {
 			DestroyTextures();
 		}
 
