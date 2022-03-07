@@ -349,10 +349,10 @@ static void BrowserInit(obs_data_t *settings_obs)
 	 * browser sources are coming from OBS. */
 	std::stringstream prod_ver;
 	prod_ver << "Chrome/";
-	prod_ver << std::to_string(CHROME_VERSION_MAJOR) << "."
-		 << std::to_string(CHROME_VERSION_MINOR) << "."
-		 << std::to_string(CHROME_VERSION_BUILD) << "."
-		 << std::to_string(CHROME_VERSION_PATCH);
+	prod_ver << std::to_string(cef_version_info(4)) << "."
+		 << std::to_string(cef_version_info(5)) << "."
+		 << std::to_string(cef_version_info(6)) << "."
+		 << std::to_string(cef_version_info(7));
 	prod_ver << " OBS/";
 	prod_ver << std::to_string(obs_maj) << "." << std::to_string(obs_min)
 		 << "." << std::to_string(obs_pat);
@@ -778,8 +778,6 @@ static void check_hwaccel_support(void)
 
 bool obs_module_load(void)
 {
-	blog(LOG_INFO, "[obs-browser]: Version %s", OBS_BROWSER_VERSION_STRING);
-
 #if defined(USE_UI_LOOP) && defined(WIN32)
 	qRegisterMetaType<MessageTask>("MessageTask");
 #endif
@@ -798,6 +796,12 @@ bool obs_module_load(void)
 		return false;
 #endif
 #endif
+	blog(LOG_INFO, "[obs-browser]: Version %s", OBS_BROWSER_VERSION_STRING);
+	blog(LOG_INFO,
+	     "[obs-browser]: CEF Version %i.%i.%i.%i (runtime), %s (compiled)",
+	     cef_version_info(4), cef_version_info(5), cef_version_info(6),
+	     cef_version_info(7), CEF_VERSION);
+
 	RegisterBrowserSource();
 
 #if BROWSER_FRONTEND_API_SUPPORT_ENABLED
