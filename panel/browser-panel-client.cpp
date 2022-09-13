@@ -30,6 +30,11 @@ CefRefPtr<CefLifeSpanHandler> QCefBrowserClient::GetLifeSpanHandler()
 	return this;
 }
 
+CefRefPtr<CefFocusHandler> QCefBrowserClient::GetFocusHandler()
+{
+	return this;
+}
+
 CefRefPtr<CefContextMenuHandler> QCefBrowserClient::GetContextMenuHandler()
 {
 	return this;
@@ -198,6 +203,21 @@ bool QCefBrowserClient::OnBeforePopup(
 	return true;
 }
 
+bool QCefBrowserClient::OnSetFocus(CefRefPtr<CefBrowser>,
+				   CefFocusHandler::FocusSource source)
+{
+	/* Don't steal focus when the webpage navigates. This is especially
+	   obvious on startup when the user has many browser docks defined,
+	   as each one will steal focus one by one, resulting in poor UX.
+	 */
+	switch (source) {
+	case FOCUS_SOURCE_NAVIGATION:
+		return true;
+	default:
+		return false;
+	}
+}
+
 void QCefBrowserClient::OnBeforeContextMenu(CefRefPtr<CefBrowser>,
 					    CefRefPtr<CefFrame>,
 					    CefRefPtr<CefContextMenuParams>,
@@ -238,9 +258,10 @@ bool QCefBrowserClient::RunContextMenu(
 			bool enabled;
 			int type_id;
 
-			for (int i = 0; i < menu_items.size(); i++) {
+			for (const std::tuple<std::string, int, bool, int>
+				     &menu_item : menu_items) {
 				std::tie(name, command_id, enabled, type_id) =
-					menu_items[i];
+					menu_item;
 				switch (type_id) {
 				case MENUITEMTYPE_COMMAND: {
 					QAction *item =

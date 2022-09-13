@@ -80,9 +80,10 @@ CefRefPtr<CefResourceRequestHandler> BrowserClient::GetResourceRequestHandler(
 	return nullptr;
 }
 
-CefResourceRequestHandler::ReturnValue BrowserClient::OnBeforeResourceLoad(
-	CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefRequest>,
-	CefRefPtr<CefCallback>)
+CefResourceRequestHandler::ReturnValue
+BrowserClient::OnBeforeResourceLoad(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+				    CefRefPtr<CefRequest>,
+				    CefRefPtr<CefCallback>)
 {
 	return RV_CONTINUE;
 }
@@ -149,7 +150,7 @@ bool BrowserClient::OnProcessMessageReceived(
 		} else if (name == "setCurrentScene") {
 			const std::string scene_name =
 				input_args->GetString(1).ToString();
-			obs_source_t *source =
+			OBSSourceAutoRelease source =
 				obs_get_source_by_name(scene_name.c_str());
 			if (!source) {
 				blog(LOG_WARNING,
@@ -161,10 +162,8 @@ bool BrowserClient::OnProcessMessageReceived(
 				     "Browser source '%s' tried to switch to '%s' which isn't a scene",
 				     obs_source_get_name(bs->source),
 				     scene_name.c_str());
-				obs_source_release(source);
 			} else {
 				obs_frontend_set_current_scene(source);
-				obs_source_release(source);
 			}
 		} else if (name == "setCurrentTransition") {
 			const std::string transition_name =
@@ -172,7 +171,7 @@ bool BrowserClient::OnProcessMessageReceived(
 			obs_frontend_source_list transitions = {};
 			obs_frontend_get_transitions(&transitions);
 
-			obs_source_t *transition = nullptr;
+			OBSSourceAutoRelease transition;
 			for (size_t i = 0; i < transitions.sources.num; i++) {
 				obs_source_t *source =
 					transitions.sources.array[i];
@@ -185,15 +184,13 @@ bool BrowserClient::OnProcessMessageReceived(
 
 			obs_frontend_source_list_free(&transitions);
 
-			if (transition) {
+			if (transition)
 				obs_frontend_set_current_transition(transition);
-				obs_source_release(transition);
-			} else {
+			else
 				blog(LOG_WARNING,
 				     "Browser source '%s' tried to change the current transition to '%s' which doesn't exist",
 				     obs_source_get_name(bs->source),
 				     transition_name.c_str());
-			}
 		}
 		[[fallthrough]];
 	case ControlLevel::Basic:
@@ -214,9 +211,8 @@ bool BrowserClient::OnProcessMessageReceived(
 			json = scenes_vector;
 			obs_frontend_source_list_free(&list);
 		} else if (name == "getCurrentScene") {
-			OBSSource current_scene =
+			OBSSourceAutoRelease current_scene =
 				obs_frontend_get_current_scene();
-			obs_source_release(current_scene);
 
 			if (!current_scene)
 				return false;
@@ -243,10 +239,9 @@ bool BrowserClient::OnProcessMessageReceived(
 			json = transitions_vector;
 			obs_frontend_source_list_free(&list);
 		} else if (name == "getCurrentTransition") {
-			obs_source_t *source =
+			OBSSourceAutoRelease source =
 				obs_frontend_get_current_transition();
 			json = obs_source_get_name(source);
-			obs_source_release(source);
 		}
 		[[fallthrough]];
 	case ControlLevel::ReadObs:
@@ -320,7 +315,7 @@ void BrowserClient::OnPaint(CefRefPtr<CefBrowser>, PaintElementType type,
 		return;
 	}
 
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 	if (sharing_available) {
 		return;
 	}
@@ -352,7 +347,7 @@ void BrowserClient::OnPaint(CefRefPtr<CefBrowser>, PaintElementType type,
 	}
 }
 
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 void BrowserClient::UpdateExtraTexture()
 {
 	if (bs->texture) {
@@ -595,7 +590,6 @@ void BrowserClient::OnAudioStreamStarted(CefRefPtr<CefBrowser> browser, int id,
 	if (!stream.source) {
 		stream.source = obs_source_create_private("audio_line", nullptr,
 							  nullptr);
-		obs_source_release(stream.source);
 
 		obs_source_add_active_child(bs->source, stream.source);
 

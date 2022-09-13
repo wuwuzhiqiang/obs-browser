@@ -26,22 +26,25 @@
 #include <windows.h>
 #endif
 
-#ifdef USE_UI_LOOP
+#ifdef ENABLE_BROWSER_QT_LOOP
 #include <util/base.h>
 #include <util/platform.h>
 #include <util/threading.h>
 #ifdef WIN32
 #include <QTimer>
 #endif
-#ifdef __APPLE__
-#include "browser-mac.h"
-#endif
 #endif
 
+#ifdef USE_UI_LOOP && __APPLE__
+#include "browser-mac.h"
+#endif
+
+#ifndef UNUSED_PARAMETER
 #define UNUSED_PARAMETER(x) \
 	{                   \
 		(void)x;    \
 	}
+#endif
 
 using namespace json11;
 
@@ -446,7 +449,7 @@ bool BrowserApp::Execute(const CefString &name, CefRefPtr<CefV8Value>,
 	return true;
 }
 
-#if defined(USE_UI_LOOP) && defined(WIN32)
+#ifdef ENABLE_BROWSER_QT_LOOP
 Q_DECLARE_METATYPE(MessageTask);
 MessageObject messageObject;
 
@@ -501,7 +504,7 @@ void ProcessCef()
 }
 #endif
 
-#ifdef USE_UI_LOOP
+#ifdef ENABLE_BROWSER_QT_LOOP
 #define MAX_DELAY (1000 / 30)
 
 void BrowserApp::OnScheduleMessagePumpWork(int64 delay_ms)

@@ -3,6 +3,13 @@
 #include "cef-headers.hpp"
 #include "browser-app.hpp"
 
+#include <QWindow>
+#include <QApplication>
+
+#ifdef USE_UI_LOOP
+#include <QEventLoop>
+#include <QThread>
+#endif
 
 #ifdef __APPLE__
 #include <objc/objc.h>
@@ -190,9 +197,10 @@ void QCefWidgetInternal::closeBrowser()
 		}
 #elif __APPLE__
 		// felt hacky, might delete later
-		id view = (id)cefBrowser->GetHost()->GetWindowHandle();
-		((void (*)(id, SEL))objc_msgSend)(
-			view, sel_getUid("removeFromSuperview"));
+		void *view = (id)cefBrowser->GetHost()->GetWindowHandle();
+		if (*((bool *)view))
+			((void (*)(id, SEL))objc_msgSend)(
+				(id)view, sel_getUid("removeFromSuperview"));
 #endif
 
 		destroyBrowser(browser);
