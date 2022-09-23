@@ -97,7 +97,7 @@ public:
 	virtual void Execute() override
 	{
 
-#ifdef ENABLE_BROWSER_QT_LOOP
+#ifdef USE_UI_LOOP
 		/* you have to put the tasks on the Qt event queue after this
 		 * call otherwise the CEF message pump may stop functioning
 		 * correctly, it's only supposed to take 10ms max */
@@ -490,7 +490,7 @@ extern "C" EXPORT void obs_browser_initialize(obs_data_t* settings)
 {
 	if (!os_atomic_set_bool(&manager_initialized, true)) {
 #ifdef USE_UI_LOOP
-		BrowserInit();
+		BrowserInit(settings);
 #else
 		auto binded_fn = bind(BrowserManagerThread, settings);
 		manager_thread = thread(binded_fn);
