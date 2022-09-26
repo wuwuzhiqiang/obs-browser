@@ -718,7 +718,7 @@ void BrowserSource::Render()
 
 		const uint32_t flip_flag = flip ? GS_FLIP_V : 0;
 		while (gs_effect_loop(effect, tech))
-			gs_draw_sprite(draw_texture, 0, 0, 0);
+			gs_draw_sprite(draw_texture, flip_flag, 0, 0);
 
 		gs_blend_state_pop();
 
