@@ -19,8 +19,6 @@ if(OS_WINDOWS)
          "Use legacy CEF version 3770 for browser source plugin" OFF)
 endif()
 
-option(BROWSER_PANEL_SUPPORT_ENABLED "Enables Qt web browser panel support" OFF)
-
 if(OS_MACOS OR OS_WINDOWS)
   option(ENABLE_BROWSER_SHARED_TEXTURE
          "Enable shared texture support for browser source plugin" ON)
@@ -60,30 +58,41 @@ endif()
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/browser-config.h.in
                ${CMAKE_BINARY_DIR}/config/browser-config.h)
 
+set(obs-browser_SOURCES
+  obs-browser-plugin.cpp
+  obs-browser-source.cpp
+  obs-browser-source.hpp
+  obs-browser-source-audio.cpp
+  browser-app.cpp
+  browser-app.hpp
+  browser-client.cpp
+  browser-client.hpp
+  browser-scheme.cpp
+  browser-scheme.hpp
+  browser-version.h
+  cef-headers.hpp
+  deps/json11/json11.cpp
+  deps/json11/json11.hpp
+  deps/base64/base64.cpp
+  deps/base64/base64.hpp
+  deps/wide-string.cpp
+  deps/wide-string.hpp
+  deps/signal-restore.cpp
+  deps/signal-restore.hpp
+  deps/obs-websocket-api/obs-websocket-api.h
+  ${CMAKE_BINARY_DIR}/config/browser-config.h
+)
+
+if(APPLE)
+  list(APPEND obs-browser_SOURCES
+      browser-mac.mm
+      browser-mac.h
+    )
+endif()
+
 target_sources(
   obs-browser
-  PRIVATE obs-browser-plugin.cpp
-          obs-browser-source.cpp
-          obs-browser-source.hpp
-          obs-browser-source-audio.cpp
-          browser-app.cpp
-          browser-app.hpp
-          browser-client.cpp
-          browser-client.hpp
-          browser-scheme.cpp
-          browser-scheme.hpp
-          browser-version.h
-          cef-headers.hpp
-          deps/json11/json11.cpp
-          deps/json11/json11.hpp
-          deps/base64/base64.cpp
-          deps/base64/base64.hpp
-          deps/wide-string.cpp
-          deps/wide-string.hpp
-          deps/signal-restore.cpp
-          deps/signal-restore.hpp
-          deps/obs-websocket-api/obs-websocket-api.h
-          ${CMAKE_BINARY_DIR}/config/browser-config.h)
+  PRIVATE ${obs-browser_SOURCES})
 
 target_include_directories(obs-browser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/deps
                                                ${CMAKE_BINARY_DIR}/config)
@@ -190,7 +199,7 @@ elseif(OS_MACOS)
   target_sources(obs-browser PRIVATE macutil.mm)
 
   set(CEF_HELPER_TARGET "obs-browser-helper")
-  set(CEF_HELPER_OUTPUT_NAME "OBS Helper")
+  set(CEF_HELPER_OUTPUT_NAME "obs64 Helper")
   set(CEF_HELPER_APP_SUFFIXES
       "::" " (GPU):_gpu:.gpu" " (Plugin):_plugin:.plugin"
       " (Renderer):_renderer:.renderer")

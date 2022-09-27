@@ -185,7 +185,10 @@ bool BrowserSource::CreateBrowser()
 #ifdef WIN32
 	return QueueCEFTask([this]() {
 #endif
-#ifdef USE_UI_LOOP
+#if defined(USE_UI_LOOP) && defined(__APPLE__)
+	ExecuteTask([this]() {
+#endif
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 		if (hwaccel) {
 			obs_enter_graphics();
 			tex_sharing_avail = gs_shared_texture_available();
@@ -715,7 +718,7 @@ void BrowserSource::Render()
 
 		const uint32_t flip_flag = flip ? GS_FLIP_V : 0;
 		while (gs_effect_loop(effect, tech))
-			gs_draw_sprite(draw_texture, 0, 0, 0);
+			gs_draw_sprite(draw_texture, flip_flag, 0, 0);
 
 		gs_blend_state_pop();
 
@@ -725,8 +728,10 @@ void BrowserSource::Render()
 #if defined(BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED) && \
 	defined(ENABLE_BROWSER_SHARED_TEXTURE)
 	SignalBeginFrame();
-#elif USE_UI_LOOP
+#elif defined(USE_UI_LOOP) && defined(WIN32)
 	ProcessCef();
+#elif defined(USE_UI_LOOP) && defined(__APPLE__)
+	Process();
 #endif
 }
 

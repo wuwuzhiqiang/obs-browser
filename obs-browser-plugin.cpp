@@ -97,7 +97,7 @@ public:
 	virtual void Execute() override
 	{
 
-#ifdef ENABLE_BROWSER_QT_LOOP
+#ifdef USE_UI_LOOP
 		/* you have to put the tasks on the Qt event queue after this
 		 * call otherwise the CEF message pump may stop functioning
 		 * correctly, it's only supposed to take 10ms max */
@@ -385,10 +385,9 @@ static void BrowserInit(obs_data_t *settings_obs)
 
 
 	std::string binPath = getExecutablePath();
-	binPath = binPath.substr(0, binPath.find_last_of('/'));
+	binPath = binPath.substr(0, binPath.size() - strlen("/bin/obs64"));
 	binPath += "/Frameworks/Chromium\ Embedded\ Framework.framework";
 	CefString(&settings.framework_dir_path) = binPath;
-	blog(LOG_INFO, "binPath: %s", binPath.c_str());
 #endif
 	std::string obs_locale = obs_get_locale();
 	std::string accepted_languages;
@@ -490,7 +489,7 @@ extern "C" EXPORT void obs_browser_initialize(obs_data_t* settings)
 {
 	if (!os_atomic_set_bool(&manager_initialized, true)) {
 #ifdef USE_UI_LOOP
-		BrowserInit();
+		BrowserInit(settings);
 #else
 		auto binded_fn = bind(BrowserManagerThread, settings);
 		manager_thread = thread(binded_fn);
