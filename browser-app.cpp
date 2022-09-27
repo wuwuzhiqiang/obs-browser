@@ -35,7 +35,7 @@
 #endif
 #endif
 
-#ifdef USE_UI_LOOP && __APPLE__
+#if defined(USE_UI_LOOP) && defined(__APPLE__)
 #include "browser-mac.h"
 #endif
 
