@@ -31,7 +31,7 @@
 #include "linux-keyboard-helpers.hpp"
 #endif
 
-#if defined(USE_UI_LOOP) && defined(WIN32)
+#ifdef ENABLE_BROWSER_QT_LOOP
 #include <QEventLoop>
 #include <QThread>
 #elif defined(USE_UI_LOOP) && defined(__APPLE__)
@@ -171,9 +171,7 @@ void BrowserSource::ExecuteOnBrowser(BrowserFunc func, bool async)
 	} else {
 		CefRefPtr<CefBrowser> browser = GetBrowser();
 		if (!!browser) {
-#if defined(USE_UI_LOOP) && defined(WIN32)
-			QueueBrowserTask(cefBrowser, func);
-#elif defined(USE_UI_LOOP) && defined(__APPLE__)
+#ifdef USE_UI_LOOP
 			QueueBrowserTask(cefBrowser, func);
 #else
 			QueueCEFTask([=]() { func(browser); });
@@ -190,7 +188,7 @@ bool BrowserSource::CreateBrowser()
 #if defined(USE_UI_LOOP) && defined(__APPLE__)
 	ExecuteTask([this]() {
 #endif
-#if SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 		if (hwaccel) {
 			obs_enter_graphics();
 			tex_sharing_avail = gs_shared_texture_available();
@@ -214,13 +212,13 @@ bool BrowserSource::CreateBrowser()
 #endif
 		windowInfo.windowless_rendering_enabled = true;
 
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 		windowInfo.shared_texture_enabled = hwaccel;
 #endif
 
 		CefBrowserSettings cefBrowserSettings;
 
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 #ifdef BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED
 		if (!fps_custom) {
 			windowInfo.external_begin_frame_enabled = true;
@@ -233,7 +231,7 @@ bool BrowserSource::CreateBrowser()
 		obs_get_video_info(&ovi);
 		canvas_fps = (double)ovi.fps_num / (double)ovi.fps_den;
 		cefBrowserSettings.windowless_frame_rate =
-			(fps_custom) ? fps : canvas_fps;
+			(fps_custom) ? fps : int(canvas_fps);
 #endif
 #else
 		cefBrowserSettings.windowless_frame_rate = fps;
@@ -447,7 +445,7 @@ void BrowserSource::SetShowing(bool showing)
 		Json json = Json::object{{"visible", showing}};
 		DispatchJSEvent("obsSourceVisibleChanged", json.dump(), this);
 #if defined(BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED) && \
-	defined(SHARED_TEXTURE_SUPPORT_ENABLED)
+	defined(ENABLE_BROWSER_SHARED_TEXTURE)
 		if (showing && !fps_custom) {
 			reset_frame = false;
 		}
@@ -505,7 +503,7 @@ CefRefPtr<CefBrowser> BrowserSource::GetBrowser()
 	return cefBrowser;
 }
 
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 #ifdef BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED
 inline void BrowserSource::SignalBeginFrame()
 {
@@ -652,7 +650,7 @@ void BrowserSource::Tick()
 {
 	if (create_browser && CreateBrowser())
 		create_browser = false;
-#if defined(SHARED_TEXTURE_SUPPORT_ENABLED)
+#if defined(ENABLE_BROWSER_SHARED_TEXTURE)
 #if defined(BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED)
 	if (!fps_custom)
 		reset_frame = true;
@@ -664,7 +662,7 @@ void BrowserSource::Tick()
 	if (!fps_custom) {
 		if (!!cefBrowser && canvas_fps != video_fps) {
 			cefBrowser->GetHost()->SetWindowlessFrameRate(
-				video_fps);
+				int(video_fps));
 			canvas_fps = video_fps;
 		}
 	}
@@ -677,7 +675,7 @@ extern void ProcessCef();
 void BrowserSource::Render()
 {
 	bool flip = false;
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 	flip = hwaccel;
 #endif
 
@@ -728,7 +726,7 @@ void BrowserSource::Render()
 	}
 
 #if defined(BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED) && \
-	defined(SHARED_TEXTURE_SUPPORT_ENABLED)
+	defined(ENABLE_BROWSER_SHARED_TEXTURE)
 	SignalBeginFrame();
 #elif defined(USE_UI_LOOP) && defined(WIN32)
 	ProcessCef();

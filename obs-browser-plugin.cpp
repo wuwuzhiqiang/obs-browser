@@ -42,7 +42,10 @@
 #include <dxgi.h>
 #include <dxgi1_2.h>
 #include <d3d11.h>
+#else
+#include "signal-restore.hpp"
 #endif
+
 
 #if BROWSER_FRONTEND_API_SUPPORT_ENABLED
 #include <obs-frontend-api.h>
@@ -50,6 +53,12 @@
 
 #if defined(USE_UI_LOOP) && defined(__APPLE__)
 #include "browser-mac.h"
+#endif
+
+#ifdef ENABLE_BROWSER_QT_LOOP
+#include <QApplication>
+#include <QThread>
+
 #endif
 
 OBS_DECLARE_MODULE()
@@ -75,7 +84,7 @@ bool hwaccel = false;
 
 /* ========================================================================= */
 
-#if defined(USE_UI_LOOP) && defined (WIN32)
+#ifdef ENABLE_BROWSER_QT_LOOP
 extern MessageObject messageObject;
 #endif
 
@@ -87,6 +96,7 @@ public:
 	inline BrowserTask(std::function<void()> task_) : task(task_) {}
 	virtual void Execute() override
 	{
+
 #ifdef USE_UI_LOOP
 		/* you have to put the tasks on the Qt event queue after this
 		 * call otherwise the CEF message pump may stop functioning
@@ -128,7 +138,7 @@ static void browser_source_get_defaults(obs_data_t *settings)
 	obs_data_set_default_int(settings, "width", 800);
 	obs_data_set_default_int(settings, "height", 600);
 	obs_data_set_default_int(settings, "fps", 30);
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 	obs_data_set_default_bool(settings, "fps_custom", false);
 #else
 	obs_data_set_default_bool(settings, "fps_custom", true);
@@ -212,7 +222,7 @@ static obs_properties_t *browser_source_get_properties(void *data)
 		props, "fps_custom", obs_module_text("CustomFrameRate"));
 	obs_property_set_modified_callback(fps_set, is_fps_custom);
 
-#ifndef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifndef ENABLE_BROWSER_SHARED_TEXTURE
 	obs_property_set_enabled(fps_set, false);
 #endif
 
@@ -272,10 +282,9 @@ static void missing_file_callback(void *src, const char *new_path, void *data)
 
 	if (bs) {
 		obs_source_t *source = bs->source;
-		obs_data_t *settings = obs_source_get_settings(source);
+		OBSDataAutoRelease settings = obs_source_get_settings(source);
 		obs_data_set_string(settings, "local_file", new_path);
 		obs_source_update(source, settings);
-		obs_data_release(settings);
 	}
 
 	UNUSED_PARAMETER(data);
@@ -288,7 +297,7 @@ static obs_missing_files_t *browser_source_missingfiles(void *data)
 
 	if (bs) {
 		obs_source_t *source = bs->source;
-		obs_data_t *settings = obs_source_get_settings(source);
+		OBSDataAutoRelease settings = obs_source_get_settings(source);
 
 		bool enabled = obs_data_get_bool(settings, "is_local_file");
 		const char *path = obs_data_get_string(settings, "local_file");
@@ -304,8 +313,6 @@ static obs_missing_files_t *browser_source_missingfiles(void *data)
 				obs_missing_files_add_file(files, file);
 			}
 		}
-
-		obs_data_release(settings);
 	}
 
 	return files;
@@ -315,11 +322,9 @@ static CefRefPtr<BrowserApp> app;
 
 static void BrowserInit(obs_data_t *settings_obs)
 {
-	blog(LOG_INFO, "BrowserInit - 0");
 #if defined(__APPLE__) && defined(USE_UI_LOOP)
 	ExecuteTask([settings_obs]() {
 #endif
-		blog(LOG_INFO, "BrowserInit - 1");
 		string path = obs_get_module_binary_path(obs_current_module());
 		path = path.substr(0, path.find_last_of('/') + 1);
 		path += "//obs-browser-page";
@@ -331,11 +336,10 @@ static void BrowserInit(obs_data_t *settings_obs)
 		* CEF */
 		struct obs_cmdline_args cmdline_args = obs_get_cmdline_args();
 		CefMainArgs args(cmdline_args.argc, cmdline_args.argv);
-		blog(LOG_INFO, "BrowserInit - 2");
 #endif
 
 	CefSettings settings;
-	settings.log_severity = LOGSEVERITY_VERBOSE;
+	settings.log_severity = LOGSEVERITY_DISABLE;
 	settings.windowless_rendering_enabled = true;
 	settings.no_sandbox = true;
 
@@ -344,7 +348,6 @@ static void BrowserInit(obs_data_t *settings_obs)
 	uint32_t obs_min = (obs_ver >> 16) & 0xFF;
 	uint32_t obs_pat = obs_ver & 0xFFFF;
 
-	blog(LOG_INFO, "BrowserInit - 3");
 	/* This allows servers the ability to determine that browser panels and
 	 * browser sources are coming from OBS. */
 	std::stringstream prod_ver;
@@ -363,7 +366,6 @@ static void BrowserInit(obs_data_t *settings_obs)
 	CefString(&settings.product_version) = prod_ver.str();
 #endif
 
-	blog(LOG_INFO, "BrowserInit - 4");
 #ifdef USE_UI_LOOP
 	settings.external_message_pump = true;
 	settings.multi_threaded_message_loop = false;
@@ -383,12 +385,10 @@ static void BrowserInit(obs_data_t *settings_obs)
 
 
 	std::string binPath = getExecutablePath();
-	binPath = binPath.substr(0, binPath.find_last_of('/'));
+	binPath = binPath.substr(0, binPath.size() - strlen("/bin/obs64"));
 	binPath += "/Frameworks/Chromium\ Embedded\ Framework.framework";
 	CefString(&settings.framework_dir_path) = binPath;
-	blog(LOG_INFO, "binPath: %s", binPath.c_str());
 #endif
-	blog(LOG_INFO, "BrowserInit - 5");
 	std::string obs_locale = obs_get_locale();
 	std::string accepted_languages;
 	if (obs_locale != "en-US") {
@@ -405,7 +405,7 @@ static void BrowserInit(obs_data_t *settings_obs)
 	CefString(&settings.locale) = obs_get_locale();
 	CefString(&settings.accept_language_list) = accepted_languages;
 	CefString(&settings.cache_path) = conf_path_abs;
-#if !defined(__APPLE__) || defined(BROWSER_LEGACY)
+#if !defined(__APPLE__) || defined(ENABLE_BROWSER_LEGACY)
 	char *abs_path = os_get_abs_path_ptr(path.c_str());
 	CefString(&settings.browser_subprocess_path) = abs_path;
 	bfree(abs_path);
@@ -413,8 +413,7 @@ static void BrowserInit(obs_data_t *settings_obs)
 
 	bool tex_sharing_avail = false;
 
-	blog(LOG_INFO, "BrowserInit - 6");
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 	if (hwaccel) {
 		obs_enter_graphics();
 		hwaccel = tex_sharing_avail = gs_shared_texture_available();
@@ -422,11 +421,19 @@ static void BrowserInit(obs_data_t *settings_obs)
 	}
 #endif
 
-	blog(LOG_INFO, "BrowserInit - 7");
-	app = new BrowserApp(hwaccel);
+	app = new BrowserApp(tex_sharing_avail);
 
 #ifdef _WIN32
 	CefExecuteProcess(args, app, nullptr);
+#endif
+
+#if !defined(_WIN32)
+	BackupSignalHandlers();
+	CefInitialize(args, settings, app, nullptr);
+	RestoreSignalHandlers();
+#elif (CHROME_VERSION_BUILD > 3770)
+	CefInitialize(args, settings, app, nullptr);
+#else
 	/* Massive (but amazing) hack to prevent chromium from modifying our
 	 * process tokens and permissions, which caused us problems with winrt,
 	 * used with window capture.  Note, the structure internally is just
@@ -435,11 +442,8 @@ static void BrowserInit(obs_data_t *settings_obs)
 	 * to. */
 	uintptr_t zeroed_memory_lol[32] = {};
 	CefInitialize(args, settings, app, zeroed_memory_lol);
-#else
-	blog(LOG_INFO, "BrowserInit - 8");
-	CefInitialize(args, settings, app, nullptr);
-	blog(LOG_INFO, "BrowserInit - 9");
 #endif
+
 #if !ENABLE_LOCAL_FILE_URL_SCHEME
 		/* Register http://absolute/ scheme handler for older
 		* CEF builds which do not support file:// URLs */
@@ -458,7 +462,7 @@ extern BrowserCppInt* message;
 
 static void BrowserShutdown(void)
 {
-#ifdef USE_UI_LOOP
+#ifdef ENABLE_BROWSER_QT_LOOP
 #ifdef WIN32
 	while (messageObject.ExecuteNextBrowserTask())
 		;
@@ -485,11 +489,8 @@ extern "C" EXPORT void obs_browser_initialize(obs_data_t* settings)
 {
 	if (!os_atomic_set_bool(&manager_initialized, true)) {
 #ifdef USE_UI_LOOP
-		blog(LOG_INFO, "obs_browser_initialize, using UI_LOOP, call BrowserInit");
 		BrowserInit(settings);
-		blog(LOG_INFO, "obs_browser_initialize - end");
 #else
-		blog(LOG_INFO, "obs_browser_initialize, NOT using UI_LOOP");
 		auto binded_fn = bind(BrowserManagerThread, settings);
 		manager_thread = thread(binded_fn);
 #endif
@@ -511,7 +512,6 @@ void RegisterBrowserSource()
 	info.icon_type = OBS_ICON_TYPE_BROWSER;
 
 	info.get_name = [](void *) { return obs_module_text("BrowserSource"); };
-	blog(LOG_INFO, "RegisterBrowserSource");
 	info.create = [](obs_data_t *settings, obs_source_t *source) -> void * {
         blog(LOG_INFO, "Browser Source, INIT via info.create , settings %p source %p", settings, source);
 
@@ -667,8 +667,7 @@ static void handle_obs_frontend_event(enum obs_frontend_event event, void *)
 		DispatchJSEvent("obsVirtualcamStopped", "");
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_CHANGED: {
-		OBSSource source = obs_frontend_get_current_scene();
-		obs_source_release(source);
+		OBSSourceAutoRelease source = obs_frontend_get_current_scene();
 
 		if (!source)
 			break;
@@ -724,7 +723,7 @@ static inline void EnumAdapterCount()
 }
 #endif
 
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
 #ifdef _WIN32
 static const wchar_t *blacklisted_devices[] = {
 	L"Intel", L"Microsoft", L"Radeon HD 8850M", L"Radeon HD 7660", nullptr};
@@ -778,7 +777,7 @@ static void check_hwaccel_support(void)
 
 bool obs_module_load(void)
 {
-#if defined(USE_UI_LOOP) && defined(WIN32)
+#ifdef ENABLE_BROWSER_QT_LOOP
 	qRegisterMetaType<MessageTask>("MessageTask");
 #endif
 
@@ -789,7 +788,7 @@ bool obs_module_load(void)
 	CefEnableHighDPISupport();
 	EnumAdapterCount();
 #else
-#if defined(__APPLE__) && !defined(BROWSER_LEGACY)
+#if defined(__APPLE__) && !defined(ENABLE_BROWSER_LEGACY)
 	/* Load CEF at runtime as required on macOS */
 	CefScopedLibraryLoader library_loader;
 	if (!library_loader.LoadInMain())
@@ -809,14 +808,13 @@ bool obs_module_load(void)
 #endif
 
 
-#ifdef SHARED_TEXTURE_SUPPORT_ENABLED
-	obs_data_t *private_data = obs_get_private_data();
+#ifdef ENABLE_BROWSER_SHARED_TEXTURE
+	OBSDataAutoRelease private_data = obs_get_private_data();
 	hwaccel = obs_data_get_bool(private_data, "BrowserHWAccel");
 
 	if (hwaccel) {
 		check_hwaccel_support();
 	}
-	obs_data_release(private_data);
 #endif
 
 #if defined(__APPLE__) && CHROME_VERSION_BUILD < 4183
