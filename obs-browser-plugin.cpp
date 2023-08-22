@@ -388,6 +388,7 @@ static void BrowserInit(obs_data_t *settings_obs)
 	binPath = binPath.substr(0, binPath.size() - strlen("/bin/obs64"));
 	binPath += "/Frameworks/Chromium\ Embedded\ Framework.framework";
 	CefString(&settings.framework_dir_path) = binPath;
+	printf("##########binPath:%s\n",binPath.c_str());
 #endif
 	std::string obs_locale = obs_get_locale();
 	std::string accepted_languages;
