@@ -1,5 +1,8 @@
 project(obs-browser)
 
+
+message("###################### obs browser")
+
 option(
   ENABLE_BROWSER
   "Enable building OBS with browser source plugin (required Chromium Embedded Framework)"
